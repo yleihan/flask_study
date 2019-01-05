@@ -11,21 +11,38 @@ import os
 from flask_script import Shell
 from flask_script import Manager
 from flask_migrate import Migrate,MigrateCommand
-
-
+from flask_mail import Mail
 basedir = os.path.abspath(os.path.dirname(__file__))
+
 app = Flask(__name__)
+app.config['SECRET_KEY']='sadsaga4g5a67g4da4g4s4ds3a4dsa4g4aada6123a1s3d12s'
+app.config['SQLALCHEMY_DATABASE_URI']='sqlite:///'+os.path.join(basedir,'data.sqlite')
+app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN']=True
+app.config['MAIL_SERVER'] = 'smtp.163.com'
+app.config['MAIL_PORT'] = 25
+app.config['MAIL_USE_TLS'] = False
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['FALSKY_MAIL_SUBJECT_PREFIX'] = '[Flasky]'
+app.config['FLASKY_MAIL_SENDER']='FLASKY Admin yleihan@163.com'
+app.config['FLASKY_ADMIN'] = os.environ.get('FLASKY_ADMIN')
+
 manager = Manager(app)
 bootstrap = Bootstrap(app)
 moment = Moment(app)
 db = SQLAlchemy(app)
 migrate = Migrate(app,db)
+mail = Mail(app)
 
 
 
-app.config['SECRET_KEY']='sadsaga4g5a67g4da4g4s4ds3a4dsa4g4aada6123a1s3d12s'
-app.config['SQLALCHEMY_DATABASE_URI']='sqlite:///'+os.path.join(basedir,'data.sqlite')
-app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN']=True
+def send_email(to,subject,template,**kwargs):
+    msg = Message(app.config['FLASKY_MAIL_SUBJECT_PREFIX']+subject,sender=app.config['FLASKY_MAIL_SENDER'],recipients=[to])
+    msg.body = render_template(template + '.text',**kwargs)
+    msg.html = render_template(template + '.html',**kwargs)
+    mail.send(msg)
+
+
 
 class Role(db.Model):
     __tablename__= 'roles'
@@ -56,7 +73,6 @@ manager.add_command('db',MigrateCommand)
 
 @app.route('/' , methods=['GET', 'POST'])
 def index():
-    name= None
     form = NameForm()
     if form.validate_on_submit():
         user = User.query.filter_by (username=form.name.data).first()
@@ -64,6 +80,8 @@ def index():
             user = User(username = form.name.data)
             db.session.add(user)
             session['known']= False
+            if app.config['FLASKY_ADMIN']:
+                send_email(app.config['FLASKY_ADMIN'],'New User','mail/new_user',user=user)
         else:
             session['known']=True
 
